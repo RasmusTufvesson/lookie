@@ -234,7 +234,7 @@ fn main() {
                         clear_image(&mut canvas, BLANK);
                     }
                     Key::Up => {
-                        line_radius = (line_radius + 1.0).min(5.0);
+                        line_radius = (line_radius + 1.0).min(10.0);
                     }
                     Key::Down => {
                         line_radius = (line_radius - 1.0).max(0.0);
