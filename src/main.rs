@@ -216,14 +216,15 @@ fn main() {
                     MouseButton::Left => {
                         inputs.mouse_down = true;
                         if mode == Mode::Fill {
-                            flood_fill(&mut canvas, mouse_pos, color);
+                            if inputs.right_mouse_down {
+                                flood_fill(&mut canvas, mouse_pos, BLANK);
+                            } else {
+                                flood_fill(&mut canvas, mouse_pos, color);
+                            }
                         }
                     }
                     MouseButton::Right => {
                         inputs.right_mouse_down = true;
-                        if mode == Mode::Fill {
-                            flood_fill(&mut canvas, mouse_pos, BLANK);
-                        }
                     }
                     _ => {}
                 }
