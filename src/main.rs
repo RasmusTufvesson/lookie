@@ -17,6 +17,7 @@ const MIN_ROT: f64 = -0.07;
 const MAX_ROT: f64 = 0.07;
 const DRIFT: f64 = 10.0;
 const IMAGE_SCALE: f64 = 6.0;
+const COLORS: [Rgba<u8>; 4] = [Rgba { 0: [255; 4] }, Rgba { 0: [184, 55, 55, 255] }, Rgba { 0: [75, 173, 64, 255] }, Rgba { 0: [53, 41, 186, 255] }];
 
 fn gen_rand_pos(rng: &mut ThreadRng) -> DVec2 {
     DVec2::new(rng.gen::<f64>() * DRIFT - DRIFT / 2.0, rng.gen::<f64>() * DRIFT - DRIFT / 2.0)
@@ -65,6 +66,7 @@ fn clear_image(image: &mut im::ImageBuffer<Rgba<u8>, Vec<u8>>, color: Rgba<u8>) 
 
 struct Inputs {
     pub mouse_down: bool,
+    pub right_mouse_down: bool,
 }
 
 fn main() {
@@ -105,8 +107,10 @@ fn main() {
     let mut start_pos = gen_rand_pos(&mut rng);
     let mut drift_progress = 0.0;
     let mut drift = start_pos.clone();
-    let mut inputs = Inputs { mouse_down: false };
+    let mut inputs = Inputs { mouse_down: false, right_mouse_down: false };
     let mut line_radius: f64 = 0.0;
+    let mut color = WHITE;
+    let mut color_index: i32 = 0;
 
     let mut events = Events::new(EventSettings::new());
     while let Some(e) = events.next(&mut window) {
@@ -124,7 +128,9 @@ fn main() {
             let pos: DVec2 = DVec2::new((args[0]).clamp(0.0, width as f64 - 1.0), (args[1]).clamp(0.0, height as f64 - 1.0));
             let diff = pos - mouse_pos;
             if inputs.mouse_down {
-                draw_line(&mut canvas, mouse_pos, pos.clone(), line_radius, WHITE);
+                draw_line(&mut canvas, mouse_pos, pos.clone(), line_radius, color);
+            } else if inputs.right_mouse_down {
+                draw_line(&mut canvas, mouse_pos, pos.clone(), line_radius, BLANK);
             }
             mouse_pos = pos;
             rotation += ((diff[0] - diff[1]) * ROTATION_AMOUNT).clamp(MIN_ROT, MAX_ROT);
@@ -142,8 +148,16 @@ fn main() {
         }
         
         if let Some(args) = e.press_args() {
-            if args == Button::Mouse(MouseButton::Left) {
-                inputs.mouse_down = true;
+            if let Button::Mouse(button) = args {
+                match button {
+                    MouseButton::Left => {
+                        inputs.mouse_down = true;
+                    }
+                    MouseButton::Right => {
+                        inputs.right_mouse_down = true;
+                    }
+                    _ => {}
+                }
             } else if let Button::Keyboard(key) = args {
                 match key {
                     Key::Return => {
@@ -155,14 +169,36 @@ fn main() {
                     Key::Down => {
                         line_radius = (line_radius - 1.0).max(0.0);
                     }
+                    Key::Left => {
+                        color_index -= 1;
+                        if color_index < 0 {
+                            color_index = COLORS.len() as i32 - 1;
+                        }
+                        color = COLORS[color_index as usize];
+                    }
+                    Key::Right => {
+                        color_index += 1;
+                        if color_index >= COLORS.len() as i32 {
+                            color_index = 0;
+                        }
+                        color = COLORS[color_index as usize];
+                    }
                     _ => {}
                 }
             }
         }
         
         if let Some(args) = e.release_args() {
-            if args == Button::Mouse(MouseButton::Left) {
-                inputs.mouse_down = false;
+            if let Button::Mouse(button) = args {
+                match button {
+                    MouseButton::Left => {
+                        inputs.mouse_down = false;
+                    }
+                    MouseButton::Right => {
+                        inputs.right_mouse_down = false;
+                    }
+                    _ => {}
+                }
             }
         }
     }
