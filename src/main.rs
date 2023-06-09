@@ -7,6 +7,7 @@ use pid::Pid;
 use rand::{thread_rng, rngs::ThreadRng, Rng};
 use glam::{
     DVec2,
+    UVec2,
 };
 
 const BLACK: [f32; 4] = [0.0, 0.0, 0.0, 1.0];
@@ -64,9 +65,45 @@ fn clear_image(image: &mut im::ImageBuffer<Rgba<u8>, Vec<u8>>, color: Rgba<u8>) 
     }
 }
 
+fn flood_fill(image: &mut im::ImageBuffer<Rgba<u8>, Vec<u8>>, point: DVec2, fill_color: Rgba<u8>) {
+    let target_color = image.get_pixel(point.x as u32, point.y as u32).clone();
+
+    if target_color == fill_color {
+        return;
+    }
+
+    let mut stack: Vec<UVec2> = vec![];
+    stack.push(UVec2::new(point.x as u32, point.y as u32));
+
+    while let Some(point) = stack.pop() {
+        if image.get_pixel(point.x, point.y) == &target_color {
+            image.put_pixel(point.x, point.y, fill_color);
+
+            if point.x > 0 {
+                stack.push(point - UVec2::X);
+            }
+            if point.x < image.width() - 1 {
+                stack.push(point + UVec2::X);
+            }
+            if point.y > 0 {
+                stack.push(point - UVec2::Y);
+            }
+            if point.y < image.height() - 1 {
+                stack.push(point + UVec2::Y);
+            }
+        }
+    }
+}
+
 struct Inputs {
     pub mouse_down: bool,
     pub right_mouse_down: bool,
+}
+
+#[derive(Debug, PartialEq, Eq)]
+enum Mode {
+    Normal,
+    Fill,
 }
 
 fn main() {
@@ -85,9 +122,21 @@ fn main() {
         factory: window.factory.clone(),
         encoder: window.factory.create_command_buffer().into()
     };
-    let texture: G2dTexture = Texture::from_path(
+    let draw_icon: G2dTexture = Texture::from_path(
         &mut texture_context,
-        "assets/image.png",
+        "assets/draw.png",
+        Flip::None,
+        &TextureSettings::new().filter(Filter::Nearest),
+    ).unwrap();
+    let erase_icon: G2dTexture = Texture::from_path(
+        &mut texture_context,
+        "assets/erase.png",
+        Flip::None,
+        &TextureSettings::new().filter(Filter::Nearest),
+    ).unwrap();
+    let fill_icon: G2dTexture = Texture::from_path(
+        &mut texture_context,
+        "assets/fill.png",
         Flip::None,
         &TextureSettings::new().filter(Filter::Nearest),
     ).unwrap();
@@ -111,6 +160,7 @@ fn main() {
     let mut line_radius: f64 = 0.0;
     let mut color = WHITE;
     let mut color_index: i32 = 0;
+    let mut mode = Mode::Normal;
 
     let mut events = Events::new(EventSettings::new());
     while let Some(e) = events.next(&mut window) {
@@ -120,17 +170,30 @@ fn main() {
                 canvas_texture.update(&mut texture_context, &canvas).unwrap();
                 texture_context.encoder.flush(device);
                 image(&canvas_texture, c.transform, g);
-                image(&texture, c.transform.trans(mouse_pos.x + drift.x, mouse_pos.y + drift.y).rot_rad(rotation).scale(IMAGE_SCALE, IMAGE_SCALE), g);
+                if inputs.right_mouse_down {
+                    image(&erase_icon, c.transform.trans(mouse_pos.x + drift.x, mouse_pos.y + drift.y).rot_rad(rotation).scale(IMAGE_SCALE, IMAGE_SCALE), g);
+                } else {
+                    match mode {
+                        Mode::Normal => {
+                            image(&draw_icon, c.transform.trans(mouse_pos.x + drift.x, mouse_pos.y + drift.y).rot_rad(rotation).scale(IMAGE_SCALE, IMAGE_SCALE), g);
+                        }
+                        Mode::Fill => {
+                            image(&fill_icon, c.transform.trans(mouse_pos.x + drift.x, mouse_pos.y + drift.y).rot_rad(rotation).scale(IMAGE_SCALE, IMAGE_SCALE), g);
+                        }
+                    }
+                }
             });
         }
         
         if let Some(args) = e.mouse_cursor_args() {
             let pos: DVec2 = DVec2::new((args[0]).clamp(0.0, width as f64 - 1.0), (args[1]).clamp(0.0, height as f64 - 1.0));
             let diff = pos - mouse_pos;
-            if inputs.mouse_down {
-                draw_line(&mut canvas, mouse_pos, pos.clone(), line_radius, color);
-            } else if inputs.right_mouse_down {
-                draw_line(&mut canvas, mouse_pos, pos.clone(), line_radius, BLANK);
+            if mode == Mode::Normal {
+                if inputs.mouse_down {
+                    draw_line(&mut canvas, mouse_pos, pos.clone(), line_radius, color);
+                } else if inputs.right_mouse_down {
+                    draw_line(&mut canvas, mouse_pos, pos.clone(), line_radius, BLANK);
+                }
             }
             mouse_pos = pos;
             rotation += ((diff[0] - diff[1]) * ROTATION_AMOUNT).clamp(MIN_ROT, MAX_ROT);
@@ -152,9 +215,15 @@ fn main() {
                 match button {
                     MouseButton::Left => {
                         inputs.mouse_down = true;
+                        if mode == Mode::Fill {
+                            flood_fill(&mut canvas, mouse_pos, color);
+                        }
                     }
                     MouseButton::Right => {
                         inputs.right_mouse_down = true;
+                        if mode == Mode::Fill {
+                            flood_fill(&mut canvas, mouse_pos, BLANK);
+                        }
                     }
                     _ => {}
                 }
@@ -164,7 +233,7 @@ fn main() {
                         clear_image(&mut canvas, BLANK);
                     }
                     Key::Up => {
-                        line_radius = (line_radius + 1.0).min(3.0);
+                        line_radius = (line_radius + 1.0).min(5.0);
                     }
                     Key::Down => {
                         line_radius = (line_radius - 1.0).max(0.0);
@@ -182,6 +251,12 @@ fn main() {
                             color_index = 0;
                         }
                         color = COLORS[color_index as usize];
+                    }
+                    Key::B => {
+                        mode = Mode::Fill;
+                    }
+                    Key::N => {
+                        mode = Mode::Normal;
                     }
                     _ => {}
                 }
