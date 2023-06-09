@@ -15,10 +15,35 @@ const ROTATION_AMOUNT: f64 = 0.004;
 const MIN_ROT: f64 = -0.07;
 const MAX_ROT: f64 = 0.07;
 const DRIFT: f64 = 10.0;
-const IMAGE_SCALE: f64 = 10.0;
+const IMAGE_SCALE: f64 = 6.0;
 
 fn gen_rand_pos(rng: &mut ThreadRng) -> DVec2 {
-    DVec2::new(rng.gen::<f64>() * DRIFT, rng.gen::<f64>() * DRIFT)
+    DVec2::new(rng.gen::<f64>() * DRIFT - DRIFT / 2.0, rng.gen::<f64>() * DRIFT - DRIFT / 2.0)
+}
+
+fn draw_line(image: &mut im::ImageBuffer<im::Rgba<u8>, Vec<u8>>, start: DVec2, end: DVec2, color: Rgba<u8>) {
+    let dx = (end.x - start.x).abs();
+    let dy = (end.y - start.y).abs();
+    let sx: f64 = if start.x < end.x { 1.0 } else { -1.0 };
+    let sy: f64 = if start.y < end.y { 1.0 } else { -1.0 };
+    let mut err = dx - dy;
+
+    let mut x = start.x;
+    let mut y = start.y;
+
+    while x as u32 != end.x as u32 || y as u32 != end.y as u32 {
+        image.put_pixel(x as u32, y as u32, color);
+
+        let e2 = 2.0 * err;
+        if e2 > -dy {
+            err -= dy;
+            x += sx;
+        }
+        if e2 < dx {
+            err += dx;
+            y += sy;
+        }
+    }
 }
 
 struct Inputs {
@@ -34,6 +59,7 @@ fn main() {
         .graphics_api(opengl)
         .build()
         .unwrap();
+    window.window.window.set_cursor_visible(false);
 
     let mut canvas: im::ImageBuffer<im::Rgba<u8>, Vec<_>> = im::ImageBuffer::new(width, height);
     let mut texture_context = TextureContext {
@@ -77,13 +103,13 @@ fn main() {
         }
         
         if let Some(args) = e.mouse_cursor_args() {
-            let pos: DVec2 = args.into();
+            let pos: DVec2 = DVec2::new((args[0]).clamp(0.0, width as f64 - 1.0), (args[1]).clamp(0.0, height as f64 - 1.0));
             let diff = pos - mouse_pos;
+            if inputs.mouse_down {
+                draw_line(&mut canvas, mouse_pos, pos.clone(), WHITE);
+            }
             mouse_pos = pos;
             rotation += ((diff[0] - diff[1]) * ROTATION_AMOUNT).clamp(MIN_ROT, MAX_ROT);
-            if inputs.mouse_down {
-                canvas.put_pixel((mouse_pos.x as u32).clamp(0, width - 1), (mouse_pos.y as u32).clamp(0, height - 1), WHITE);
-            }
         }
         
         if let Some(args) = e.update_args() {
