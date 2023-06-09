@@ -22,7 +22,7 @@ fn gen_rand_pos(rng: &mut ThreadRng) -> DVec2 {
     DVec2::new(rng.gen::<f64>() * DRIFT - DRIFT / 2.0, rng.gen::<f64>() * DRIFT - DRIFT / 2.0)
 }
 
-fn draw_line(image: &mut im::ImageBuffer<im::Rgba<u8>, Vec<u8>>, start: DVec2, end: DVec2, color: Rgba<u8>) {
+fn draw_line(image: &mut im::ImageBuffer<im::Rgba<u8>, Vec<u8>>, start: DVec2, end: DVec2, radius: f64, color: Rgba<u8>) {
     let dx = (end.x - start.x).abs();
     let dy = (end.y - start.y).abs();
     let sx: f64 = if start.x < end.x { 1.0 } else { -1.0 };
@@ -33,7 +33,6 @@ fn draw_line(image: &mut im::ImageBuffer<im::Rgba<u8>, Vec<u8>>, start: DVec2, e
     let mut y = start.y;
 
     while x as u32 != end.x as u32 || y as u32 != end.y as u32 {
-        image.put_pixel(x as u32, y as u32, color);
 
         let e2 = 2.0 * err;
         if e2 > -dy {
@@ -43,6 +42,17 @@ fn draw_line(image: &mut im::ImageBuffer<im::Rgba<u8>, Vec<u8>>, start: DVec2, e
         if e2 < dx {
             err += dx;
             y += sy;
+        }
+
+        for add_x in -radius as i32..=radius as i32 {
+            let current_x = x + add_x as f64;
+            for add_y in -radius as i32..=radius as i32 {
+                let current_y = y + add_y as f64;
+
+                if current_x >= 0.0 && current_x < image.width() as f64 && current_y >= 0.0 && current_y < image.height() as f64 {
+                    image.put_pixel(current_x as u32, current_y as u32, color);
+                }
+            }
         }
     }
 }
@@ -96,6 +106,7 @@ fn main() {
     let mut drift_progress = 0.0;
     let mut drift = start_pos.clone();
     let mut inputs = Inputs { mouse_down: false };
+    let mut line_radius: f64 = 0.0;
 
     let mut events = Events::new(EventSettings::new());
     while let Some(e) = events.next(&mut window) {
@@ -113,7 +124,7 @@ fn main() {
             let pos: DVec2 = DVec2::new((args[0]).clamp(0.0, width as f64 - 1.0), (args[1]).clamp(0.0, height as f64 - 1.0));
             let diff = pos - mouse_pos;
             if inputs.mouse_down {
-                draw_line(&mut canvas, mouse_pos, pos.clone(), WHITE);
+                draw_line(&mut canvas, mouse_pos, pos.clone(), line_radius, WHITE);
             }
             mouse_pos = pos;
             rotation += ((diff[0] - diff[1]) * ROTATION_AMOUNT).clamp(MIN_ROT, MAX_ROT);
@@ -133,8 +144,19 @@ fn main() {
         if let Some(args) = e.press_args() {
             if args == Button::Mouse(MouseButton::Left) {
                 inputs.mouse_down = true;
-            } else if args == Button::Keyboard(Key::Return) {
-                clear_image(&mut canvas, BLANK);
+            } else if let Button::Keyboard(key) = args {
+                match key {
+                    Key::Return => {
+                        clear_image(&mut canvas, BLANK);
+                    }
+                    Key::Up => {
+                        line_radius = (line_radius + 1.0).min(3.0);
+                    }
+                    Key::Down => {
+                        line_radius = (line_radius - 1.0).max(0.0);
+                    }
+                    _ => {}
+                }
             }
         }
         
