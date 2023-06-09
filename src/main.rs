@@ -82,7 +82,7 @@ fn main() {
     let mut canvas_texture: G2dTexture = Texture::from_image(
         &mut texture_context,
         &canvas,
-        &TextureSettings::new()
+        &TextureSettings::new().filter(Filter::Nearest),
     ).unwrap();
     let mut mouse_pos = DVec2::new(0.0, 0.0);
     let mut rotation = 0.0;
