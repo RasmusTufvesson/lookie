@@ -11,6 +11,7 @@ use glam::{
 
 const BLACK: [f32; 4] = [0.0, 0.0, 0.0, 1.0];
 const WHITE: Rgba<u8> = Rgba { 0: [255; 4] };
+const BLANK: Rgba<u8> = Rgba { 0: [0; 4] };
 const ROTATION_AMOUNT: f64 = 0.004;
 const MIN_ROT: f64 = -0.07;
 const MAX_ROT: f64 = 0.07;
@@ -43,6 +44,12 @@ fn draw_line(image: &mut im::ImageBuffer<im::Rgba<u8>, Vec<u8>>, start: DVec2, e
             err += dx;
             y += sy;
         }
+    }
+}
+
+fn clear_image(image: &mut im::ImageBuffer<Rgba<u8>, Vec<u8>>, color: Rgba<u8>) {
+    for pixel in image.pixels_mut() {
+        *pixel = color;
     }
 }
 
@@ -126,6 +133,8 @@ fn main() {
         if let Some(args) = e.press_args() {
             if args == Button::Mouse(MouseButton::Left) {
                 inputs.mouse_down = true;
+            } else if args == Button::Keyboard(Key::Return) {
+                clear_image(&mut canvas, BLANK);
             }
         }
         
