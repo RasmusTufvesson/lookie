@@ -10,8 +10,9 @@ use glam::{
     UVec2,
 };
 
-const BLACK: [f32; 4] = [0.0, 0.0, 0.0, 1.0];
+const BLACK_GL: [f32; 4] = [0.0, 0.0, 0.0, 1.0];
 const WHITE: Rgba<u8> = Rgba { 0: [255; 4] };
+const BLACK: Rgba<u8> = Rgba { 0: [0, 0, 0, 255] };
 const BLANK: Rgba<u8> = Rgba { 0: [0; 4] };
 const ROTATION_AMOUNT: f64 = 0.004;
 const MIN_ROT: f64 = -0.07;
@@ -19,6 +20,7 @@ const MAX_ROT: f64 = 0.07;
 const DRIFT: f64 = 10.0;
 const IMAGE_SCALE: f64 = 6.0;
 const COLORS: [Rgba<u8>; 4] = [Rgba { 0: [255; 4] }, Rgba { 0: [184, 55, 55, 255] }, Rgba { 0: [75, 173, 64, 255] }, Rgba { 0: [53, 41, 186, 255] }];
+const PREVIEW_TIME: f64 = 1.0;
 
 fn gen_rand_pos(rng: &mut ThreadRng) -> DVec2 {
     DVec2::new(rng.gen::<f64>() * DRIFT - DRIFT / 2.0, rng.gen::<f64>() * DRIFT - DRIFT / 2.0)
@@ -95,6 +97,21 @@ fn flood_fill(image: &mut im::ImageBuffer<Rgba<u8>, Vec<u8>>, point: DVec2, fill
     }
 }
 
+fn render_preview(image: &mut im::ImageBuffer<Rgba<u8>, Vec<u8>>, color: Rgba<u8>, radius: f64) {
+    clear_image(image, BLACK);
+    let middle = UVec2::from([image.width(), image.height()]) / 2;
+    for add_x in -radius as i32..=radius as i32 {
+        let current_x = middle.x as i32 + add_x;
+        for add_y in -radius as i32..=radius as i32 {
+            let current_y = middle.y as i32 + add_y;
+
+            if current_x >= 0 && current_x < image.width() as i32 && current_y >= 0 && current_y < image.height() as i32 {
+                image.put_pixel(current_x as u32, current_y as u32, color);
+            }
+        }
+    }
+}
+
 struct Inputs {
     pub mouse_down: bool,
     pub right_mouse_down: bool,
@@ -161,12 +178,19 @@ fn main() {
     let mut color = WHITE;
     let mut color_index: i32 = 0;
     let mut mode = Mode::Normal;
+    let mut preview_timer = 0.0;
+    let mut preview_image: im::ImageBuffer<im::Rgba<u8>, Vec<_>> = im::ImageBuffer::new(50, 50);
+    let mut preview_texture: G2dTexture = Texture::from_image(
+        &mut texture_context,
+        &preview_image,
+        &TextureSettings::new().filter(Filter::Nearest),
+    ).unwrap();
 
     let mut events = Events::new(EventSettings::new());
     while let Some(e) = events.next(&mut window) {
         if let Some(_args) = e.render_args() {
             window.draw_2d(&e, |c: Context, g, device| {
-                clear(BLACK, g);
+                clear(BLACK_GL, g);
                 canvas_texture.update(&mut texture_context, &canvas).unwrap();
                 texture_context.encoder.flush(device);
                 image(&canvas_texture, c.transform, g);
@@ -181,6 +205,11 @@ fn main() {
                             image(&fill_icon, c.transform.trans(mouse_pos.x + drift.x, mouse_pos.y + drift.y).rot_rad(rotation).scale(IMAGE_SCALE, IMAGE_SCALE), g);
                         }
                     }
+                }
+                if preview_timer > 0.0 {
+                    preview_texture.update(&mut texture_context, &preview_image).unwrap();
+                    texture_context.encoder.flush(device);
+                    image(&preview_texture, c.transform.trans((width-55) as f64, 5.0), g);
                 }
             });
         }
@@ -208,6 +237,9 @@ fn main() {
                 target_pos = gen_rand_pos(&mut rng);
             }
             drift = start_pos.lerp(target_pos, drift_progress);
+            if preview_timer > 0.0 {
+                preview_timer -= args.dt;
+            }
         }
         
         if let Some(args) = e.press_args() {
@@ -235,9 +267,13 @@ fn main() {
                     }
                     Key::Up => {
                         line_radius = (line_radius + 1.0).min(10.0);
+                        preview_timer = PREVIEW_TIME;
+                        render_preview(&mut preview_image, color, line_radius);
                     }
                     Key::Down => {
                         line_radius = (line_radius - 1.0).max(0.0);
+                        preview_timer = PREVIEW_TIME;
+                        render_preview(&mut preview_image, color, line_radius);
                     }
                     Key::Left => {
                         color_index -= 1;
@@ -245,6 +281,8 @@ fn main() {
                             color_index = COLORS.len() as i32 - 1;
                         }
                         color = COLORS[color_index as usize];
+                        preview_timer = PREVIEW_TIME;
+                        render_preview(&mut preview_image, color, line_radius);
                     }
                     Key::Right => {
                         color_index += 1;
@@ -252,6 +290,8 @@ fn main() {
                             color_index = 0;
                         }
                         color = COLORS[color_index as usize];
+                        preview_timer = PREVIEW_TIME;
+                        render_preview(&mut preview_image, color, line_radius);
                     }
                     Key::B => {
                         mode = Mode::Fill;
